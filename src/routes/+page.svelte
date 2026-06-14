@@ -61,7 +61,10 @@
 		records: AirtableRecord[];
 	}
 
-	const EXCLUDED_COLUMNS = new Set(['ID', 'Created', 'Notes', 'LastModified', 'Status', 'CreatedBy', 'AddedOn']);
+	const EXCLUDED_COLUMNS = new Set([
+		'ID', 'Created', 'Notes', 'LastModified', 'Status', 'CreatedBy', 'AddedOn',
+		'Last Modified', 'Created By'
+	]);
 
 	let records = $state<AirtableRecord[]>([]);
 	let loading = $state(false);
@@ -144,10 +147,18 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each records as record}
+							{#each records as record}
 							<tr>
 								{#each allFieldKeys as key}
-									<td>{String(record.fields[key] ?? '')}</td>
+									<td>
+										{#if key === 'Name' && record.fields['URL']}
+											<a href={String(record.fields['URL'])} target="_blank" rel="noreferrer">
+												{String(record.fields[key] ?? '')}
+											</a>
+										{:else}
+											{String(record.fields[key] ?? '')}
+										{/if}
+									</td>
 								{/each}
 							</tr>
 						{/each}
@@ -366,5 +377,12 @@
 	}
 	tr:hover {
 		background: #f1f5f9;
+	}
+	td a {
+		color: #3b82f6;
+		text-decoration: none;
+	}
+	td a:hover {
+		text-decoration: underline;
 	}
 </style>
