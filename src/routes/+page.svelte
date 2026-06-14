@@ -61,6 +61,8 @@
 		records: AirtableRecord[];
 	}
 
+	const EXCLUDED_COLUMNS = new Set(['ID', 'Created', 'Notes', 'LastModified', 'Status', 'CreatedBy', 'AddedOn']);
+
 	let records = $state<AirtableRecord[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
@@ -70,7 +72,9 @@
 		const keySet = new Set<string>();
 		for (const r of recs) {
 			for (const key of Object.keys(r.fields)) {
-				keySet.add(key);
+				if (!EXCLUDED_COLUMNS.has(key)) {
+					keySet.add(key);
+				}
 			}
 		}
 		return Array.from(keySet);
@@ -134,8 +138,6 @@
 				<table>
 					<thead>
 						<tr>
-							<th>ID</th>
-							<th>Created</th>
 							{#each allFieldKeys as key}
 								<th>{key}</th>
 							{/each}
@@ -144,8 +146,6 @@
 					<tbody>
 						{#each records as record}
 							<tr>
-								<td class="cell-id">{record.id}</td>
-								<td class="cell-date">{record.createdTime}</td>
 								{#each allFieldKeys as key}
 									<td>{String(record.fields[key] ?? '')}</td>
 								{/each}
@@ -366,16 +366,5 @@
 	}
 	tr:hover {
 		background: #f1f5f9;
-	}
-	.cell-id {
-		font-family: monospace;
-		font-size: 0.75rem;
-		color: #64748b;
-	}
-	.cell-date {
-		font-family: monospace;
-		font-size: 0.75rem;
-		color: #64748b;
-		white-space: nowrap;
 	}
 </style>
