@@ -26,6 +26,8 @@
 - Build output `build/` is in `.gitignore` — the deploy workflow uploads it directly.
 - Prettier: tabs, single quotes, no trailing commas, `prettier-plugin-svelte` for `.svelte` files.
 - **Svelte 5 runes** — use `$state()`, `$derived()`, `$effect()`, `$props()` (not Svelte 4 `export let`, bare `let` reactive declarations, or `$:` labels).
+- **`$state` with `Set` does not work** — mutations like `.add()` / `.delete()` may not trigger re-renders. Use `Record<string, boolean>` with plain property assignment instead.
+- **Prefer small components** — keep components focused on a single responsibility. A file > 200 lines is a sign it should be split. One component = one concern (table, form, toolbar, etc.).
 
 ## Deployment
 

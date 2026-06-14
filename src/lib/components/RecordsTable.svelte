@@ -11,14 +11,12 @@
 		rowStatus: Record<string, 'idle' | 'success' | 'error'>;
 	} = $props();
 
-	let expandedRows = $state(new Set<string>());
+	let expandedRows = $state<Record<string, boolean>>({});
 
 	function toggleRow(id: string) {
-		if (expandedRows.has(id)) {
-			expandedRows.delete(id);
-		} else {
-			expandedRows.add(id);
-		}
+		const next = !expandedRows[id];
+		console.log(`[toggleRow] id: ${id}, expanding: ${next}`);
+		expandedRows[id] = next;
 	}
 </script>
 
@@ -39,7 +37,7 @@
 					<tr>
 						<td class="col-expand">
 							<button class="expand-btn" onclick={() => toggleRow(record.id)}>
-								{expandedRows.has(record.id) ? '▼' : '▶'}
+								{expandedRows[record.id] ? '▼' : '▶'}
 							</button>
 						</td>
 						{#each allFieldKeys as key}
@@ -61,7 +59,7 @@
 							{/if}
 						</td>
 					</tr>
-					{#if expandedRows.has(record.id)}
+					{#if expandedRows[record.id]}
 						<tr class="detail-row">
 							<td colspan={1 + allFieldKeys.length + 1}>
 								<div class="detail-grid">
