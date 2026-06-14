@@ -62,8 +62,8 @@
 	}
 
 	const EXCLUDED_COLUMNS = new Set([
-		'ID', 'Created', 'Notes', 'LastModified', 'Status', 'CreatedBy', 'AddedOn',
-		'Last Modified', 'Created By'
+		'ID', 'Created', 'Notes', 'Status', 'AddedOn',
+		'Last Modified', 'Created By', 'URL'
 	]);
 
 	let records = $state<AirtableRecord[]>([]);
