@@ -1,9 +1,10 @@
-<svelte:head>
-	<title>CuratedNewsletterAutomatingWebsite</title>
-	<meta name="description" content="Automated curation for newsletters — streamlined and simple." />
-</svelte:head>
-
 <script lang="ts">
+	import TopBar from '$lib/components/TopBar.svelte';
+	import RecordsTable from '$lib/components/RecordsTable.svelte';
+	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
+	import { convertRecordToLink, sendLinkToCurated, type LinkData } from '$lib/curated';
+	import type { AirtableRecord, AirtableResponse } from '$lib/types';
+
 	const fields = [
 		{ key: 'AIRTABLE_API_ACCESS_TOKEN', label: 'Airtable API Access Token', group: 'airtable' },
 		{ key: 'AIRTABLE_API_URL', label: 'Airtable API URL', group: 'airtable' },
@@ -16,6 +17,17 @@
 	] as const;
 
 	const STORAGE_KEY = 'curation-settings';
+
+	const EXCLUDED_COLUMNS = new Set([
+		'ID',
+		'Created',
+		'Notes',
+		'Status',
+		'AddedOn',
+		'Last Modified',
+		'Created By',
+		'URL'
+	]);
 
 	function loadSettings(): Record<string, string> {
 		if (typeof localStorage === 'undefined') return {};
@@ -51,25 +63,14 @@
 		saved = false;
 	}
 
-	interface AirtableRecord {
-		id: string;
-		createdTime: string;
-		fields: Record<string, unknown>;
-	}
-
-	interface AirtableResponse {
-		records: AirtableRecord[];
-	}
-
-	const EXCLUDED_COLUMNS = new Set([
-		'ID', 'Created', 'Notes', 'Status', 'AddedOn',
-		'Last Modified', 'Created By', 'URL'
-	]);
-
 	let records = $state<AirtableRecord[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let allFieldKeys = $state<string[]>([]);
+	let sendingAll = $state(false);
+	let sendProgress = $state<{ sent: number; total: number; errors: number } | null>(null);
+	let rowStatus = $state<Record<string, 'idle' | 'success' | 'error'>>({});
+	let sendToast = $state<string | null>(null);
 
 	function getAllFieldKeys(recs: AirtableRecord[]): string[] {
 		const keySet = new Set<string>();
@@ -81,6 +82,53 @@
 			}
 		}
 		return Array.from(keySet);
+	}
+
+	async function handleSendAll() {
+		const settings = loadSettings();
+		const apiUrl = settings['CURATED_API_URL'];
+		const token = settings['CURATED_API_TOKEN'];
+		const publicationId = settings['CURATED_PUBLICATION_ID'];
+
+		if (!apiUrl || !token || !publicationId) {
+			error = 'Fill in all required Curated settings first.';
+			return;
+		}
+
+		const config = { apiUrl, token, publicationId };
+		const links: LinkData[] = records.map((r) => convertRecordToLink(r));
+
+		sendingAll = true;
+		sendProgress = { sent: 0, total: links.length, errors: 0 };
+		sendToast = null;
+		rowStatus = {};
+		error = null;
+
+		for (let i = 0; i < links.length; i++) {
+			const id = records[i].id;
+			try {
+				await sendLinkToCurated(links[i], config);
+				rowStatus[id] = 'success';
+				sendProgress = { ...sendProgress, sent: sendProgress.sent + 1 };
+			} catch {
+				rowStatus[id] = 'error';
+				sendProgress = {
+					...sendProgress,
+					sent: sendProgress.sent + 1,
+					errors: sendProgress.errors + 1
+				};
+			}
+		}
+
+		sendingAll = false;
+		const total = sendProgress.total;
+		const errs = sendProgress.errors;
+		if (errs === 0) {
+			sendToast = `All ${total} links sent successfully.`;
+		} else {
+			sendToast = `${total - errs}/${total} sent. ${errs} failed.`;
+		}
+		setTimeout(() => (sendToast = null), 4000);
 	}
 
 	async function fetchData() {
@@ -124,11 +172,20 @@
 	}
 </script>
 
-<div class="top-bar">
-	<button onclick={fetchData} disabled={loading}>
-		{loading ? 'Loading...' : 'Get recent data'}
-	</button>
-</div>
+<svelte:head>
+	<title>CuratedNewsletterAutomatingWebsite</title>
+	<meta name="description" content="Automated curation for newsletters — streamlined and simple." />
+</svelte:head>
+
+<TopBar
+	{loading}
+	{sendingAll}
+	hasRecords={records.length > 0}
+	{sendProgress}
+	{sendToast}
+	onfetch={fetchData}
+	onsendall={handleSendAll}
+/>
 
 <div class="layout">
 	<main>
@@ -136,87 +193,19 @@
 			<p class="error-message">{error}</p>
 		{:else if loading}
 			<p class="status">Fetching data...</p>
-		{:else if records.length > 0}
-			<div class="table-scroll">
-				<table>
-					<thead>
-						<tr>
-							{#each allFieldKeys as key}
-								<th>{key}</th>
-							{/each}
-						</tr>
-					</thead>
-					<tbody>
-							{#each records as record}
-							<tr>
-								{#each allFieldKeys as key}
-									<td>
-										{#if key === 'Name' && record.fields['URL']}
-											<a href={String(record.fields['URL'])} target="_blank" rel="noreferrer">
-												{String(record.fields[key] ?? '')}
-											</a>
-										{:else}
-											{String(record.fields[key] ?? '')}
-										{/if}
-									</td>
-								{/each}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
 		{:else}
-			<p class="status">Press "Get recent data" to fetch records from Airtable.</p>
+			<RecordsTable {records} {allFieldKeys} {rowStatus} />
 		{/if}
 	</main>
 
-	<aside class="sidebar">
-		<h2>Settings</h2>
-		<p class="sidebar-subtitle">API credentials & identifiers</p>
-
-		<form onsubmit={handleSubmit}>
-			<fieldset>
-				<legend>Airtable</legend>
-				{#each fields.filter((f) => f.group === 'airtable') as field}
-					<label>
-						<span>{field.label}</span>
-						<input
-							type="text"
-							name={field.key}
-							placeholder={field.key}
-							value={getValue(field.key)}
-							oninput={(e) => setValue(field.key, e.currentTarget.value)}
-						/>
-					</label>
-				{/each}
-			</fieldset>
-
-			<fieldset>
-				<legend>Curated</legend>
-				{#each fields.filter((f) => f.group === 'curated') as field}
-					<label>
-						<span>{field.label}</span>
-						<input
-							type="text"
-							name={field.key}
-							placeholder={field.key}
-							value={getValue(field.key)}
-							oninput={(e) => setValue(field.key, e.currentTarget.value)}
-						/>
-					</label>
-				{/each}
-			</fieldset>
-
-			<div class="actions">
-				<button type="submit">Save</button>
-				<button type="button" onclick={handleReset}>Reset</button>
-			</div>
-		</form>
-
-		{#if saved}
-			<p class="toast">Settings saved to localStorage.</p>
-		{/if}
-	</aside>
+	<SettingsPanel
+		{fields}
+		{values}
+		{saved}
+		onchange={setValue}
+		onsave={handleSubmit}
+		onreset={handleReset}
+	/>
 </div>
 
 <style>
@@ -226,126 +215,6 @@
 		gap: 2rem;
 		align-items: start;
 	}
-	p {
-		margin-bottom: 1rem;
-		color: #334155;
-	}
-	.sidebar {
-		background: #f8fafc;
-		border: 1px solid #e2e8f0;
-		border-radius: 0.5rem;
-		padding: 1.5rem;
-	}
-	.sidebar h2 {
-		font-size: 1.25rem;
-		font-weight: 600;
-		margin-bottom: 0.25rem;
-	}
-	.sidebar-subtitle {
-		font-size: 0.875rem;
-		color: #64748b;
-		margin-bottom: 1.5rem;
-	}
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 1.25rem;
-	}
-	fieldset {
-		border: 1px solid #e2e8f0;
-		border-radius: 0.375rem;
-		padding: 1rem;
-	}
-	legend {
-		font-weight: 600;
-		font-size: 0.875rem;
-		padding: 0 0.5rem;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		margin-bottom: 0.75rem;
-	}
-	label:last-child {
-		margin-bottom: 0;
-	}
-	label span {
-		font-size: 0.75rem;
-		color: #475569;
-	}
-	input {
-		padding: 0.375rem 0.5rem;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.25rem;
-		font-family: monospace;
-		font-size: 0.75rem;
-	}
-	input:focus {
-		outline: none;
-		border-color: #3b82f6;
-		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-	}
-	.actions {
-		display: flex;
-		gap: 0.5rem;
-	}
-	button {
-		padding: 0.375rem 1rem;
-		border: none;
-		border-radius: 0.25rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		cursor: pointer;
-	}
-	button[type='submit'] {
-		background: #3b82f6;
-		color: #fff;
-	}
-	button[type='submit']:hover {
-		background: #2563eb;
-	}
-	button[type='button'] {
-		background: #e2e8f0;
-		color: #334155;
-	}
-	button[type='button']:hover {
-		background: #cbd5e1;
-	}
-	.toast {
-		margin-top: 0.75rem;
-		padding: 0.5rem 0.75rem;
-		background: #dcfce7;
-		color: #166534;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
-	}
-	.top-bar {
-		text-align: center;
-		margin-bottom: 1.5rem;
-	}
-	.top-bar button {
-		padding: 0.5rem 1.5rem;
-		font-size: 1rem;
-		background: #3b82f6;
-		color: #fff;
-		border: none;
-		border-radius: 0.375rem;
-		font-weight: 600;
-		cursor: pointer;
-	}
-	.top-bar button:hover:not(:disabled) {
-		background: #2563eb;
-	}
-	.top-bar button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.status {
-		text-align: center;
-		color: #64748b;
-		padding: 2rem 0;
-	}
 	.error-message {
 		background: #fef2f2;
 		color: #dc2626;
@@ -353,36 +222,9 @@
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
 	}
-	.table-scroll {
-		overflow-x: auto;
-	}
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.8125rem;
-	}
-	th,
-	td {
-		padding: 0.5rem 0.75rem;
-		text-align: left;
-		border-bottom: 1px solid #e2e8f0;
-		white-space: nowrap;
-	}
-	th {
-		background: #f8fafc;
-		font-weight: 600;
-		color: #475569;
-		position: sticky;
-		top: 0;
-	}
-	tr:hover {
-		background: #f1f5f9;
-	}
-	td a {
-		color: #3b82f6;
-		text-decoration: none;
-	}
-	td a:hover {
-		text-decoration: underline;
+	.status {
+		text-align: center;
+		color: #64748b;
+		padding: 2rem 0;
 	}
 </style>

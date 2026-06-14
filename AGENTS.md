@@ -8,14 +8,14 @@
 
 ## Commands
 
-| Action | Command |
-|---|---|
-| Dev server | `bun run dev` |
-| Build | `bun run build` (outputs to `build/`) |
-| Preview build | `bun run preview` |
-| Typecheck | `bun run check` |
-| Format | `bun run format` (prettier) |
-| Lint | `bun run lint` (prettier --check) |
+| Action        | Command                               |
+| ------------- | ------------------------------------- |
+| Dev server    | `bun run dev`                         |
+| Build         | `bun run build` (outputs to `build/`) |
+| Preview build | `bun run preview`                     |
+| Typecheck     | `bun run check`                       |
+| Format        | `bun run format` (prettier)           |
+| Lint          | `bun run lint` (prettier --check)     |
 
 > No tests exist — `bun test` is not configured.
 

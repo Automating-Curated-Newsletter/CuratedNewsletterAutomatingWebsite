@@ -6,14 +6,14 @@ Built with [SvelteKit](https://svelte.dev/docs/kit) + [adapter-static](https://s
 
 ## Commands
 
-| Action | Command |
-|---|---|
-| Dev server | `bun run dev` |
-| Build | `bun run build` |
+| Action        | Command           |
+| ------------- | ----------------- |
+| Dev server    | `bun run dev`     |
+| Build         | `bun run build`   |
 | Preview build | `bun run preview` |
-| Typecheck | `bun run check` |
-| Format | `bun run format` |
-| Lint | `bun run lint` |
+| Typecheck     | `bun run check`   |
+| Format        | `bun run format`  |
+| Lint          | `bun run lint`    |
 
 ## License
 
