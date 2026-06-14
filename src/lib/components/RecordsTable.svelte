@@ -10,6 +10,16 @@
 		allFieldKeys: string[];
 		rowStatus: Record<string, 'idle' | 'success' | 'error'>;
 	} = $props();
+
+	let expandedRows = $state(new Set<string>());
+
+	function toggleRow(id: string) {
+		if (expandedRows.has(id)) {
+			expandedRows.delete(id);
+		} else {
+			expandedRows.add(id);
+		}
+	}
 </script>
 
 {#if records.length > 0}
@@ -17,6 +27,7 @@
 		<table>
 			<thead>
 				<tr>
+					<th class="col-expand"></th>
 					{#each allFieldKeys as key}
 						<th>{key}</th>
 					{/each}
@@ -26,6 +37,11 @@
 			<tbody>
 				{#each records as record}
 					<tr>
+						<td class="col-expand">
+							<button class="expand-btn" onclick={() => toggleRow(record.id)}>
+								{expandedRows.has(record.id) ? '▼' : '▶'}
+							</button>
+						</td>
 						{#each allFieldKeys as key}
 							<td>
 								{#if key === 'Name' && record.fields['URL']}
@@ -45,6 +61,24 @@
 							{/if}
 						</td>
 					</tr>
+					{#if expandedRows.has(record.id)}
+						<tr class="detail-row">
+							<td colspan={1 + allFieldKeys.length + 1}>
+								<div class="detail-grid">
+									<span class="detail-label">URL</span>
+									<span class="detail-value">{String(record.fields['URL'] ?? '—')}</span>
+									<span class="detail-label">NewURL</span>
+									<span class="detail-value">{String(record.fields['NewURL'] ?? '—')}</span>
+									<span class="detail-label">Name</span>
+									<span class="detail-value">{String(record.fields['Name'] ?? '—')}</span>
+									<span class="detail-label">NewDescription</span>
+									<span class="detail-value">{String(record.fields['NewDescription'] ?? '—')}</span>
+									<span class="detail-label">Notes</span>
+									<span class="detail-value">{String(record.fields['Notes'] ?? '—')}</span>
+								</div>
+							</td>
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
@@ -99,6 +133,44 @@
 	}
 	.badge-error {
 		color: #dc2626;
+	}
+	.col-expand {
+		text-align: center;
+		width: 2rem;
+		padding: 0;
+	}
+	.expand-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 0.75rem;
+		padding: 0.375rem;
+		color: #94a3b8;
+		line-height: 1;
+	}
+	.expand-btn:hover {
+		color: #475569;
+	}
+	.detail-row td {
+		background: #f9fafb;
+		padding: 0;
+		border-bottom: 1px solid #e2e8f0;
+	}
+	.detail-grid {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.25rem 1rem;
+		padding: 0.75rem 1rem 0.75rem 3rem;
+		font-size: 0.8125rem;
+	}
+	.detail-label {
+		font-weight: 600;
+		color: #64748b;
+		white-space: nowrap;
+	}
+	.detail-value {
+		color: #334155;
+		word-break: break-all;
 	}
 	.status {
 		text-align: center;
