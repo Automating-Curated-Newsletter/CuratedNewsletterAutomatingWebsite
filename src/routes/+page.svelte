@@ -50,22 +50,113 @@
 		localStorage.removeItem(STORAGE_KEY);
 		saved = false;
 	}
+
+	interface AirtableRecord {
+		id: string;
+		createdTime: string;
+		fields: Record<string, unknown>;
+	}
+
+	interface AirtableResponse {
+		records: AirtableRecord[];
+	}
+
+	let records = $state<AirtableRecord[]>([]);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+	let allFieldKeys = $state<string[]>([]);
+
+	function getAllFieldKeys(recs: AirtableRecord[]): string[] {
+		const keySet = new Set<string>();
+		for (const r of recs) {
+			for (const key of Object.keys(r.fields)) {
+				keySet.add(key);
+			}
+		}
+		return Array.from(keySet);
+	}
+
+	async function fetchData() {
+		const settings = loadSettings();
+		const token = settings['AIRTABLE_API_ACCESS_TOKEN'];
+		const apiUrl = settings['AIRTABLE_API_URL'];
+		const baseId = settings['AIRTABLE_BASE_ID'];
+		const tableName = settings['AIRTABLE_TABLE_NAME'];
+		const viewId = settings['AIRTABLE_VIEW_ID'];
+
+		if (!token || !apiUrl || !baseId || !tableName) {
+			error = 'Fill in all required Airtable settings first.';
+			return;
+		}
+
+		loading = true;
+		error = null;
+
+		try {
+			const endpoint = `${apiUrl}/${baseId}/${tableName}${viewId ? `?view=${viewId}` : ''}`;
+			const response = await fetch(endpoint, {
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			if (!response.ok) {
+				throw new Error(`API error: ${response.status} ${response.statusText}`);
+			}
+
+			const data: AirtableResponse = await response.json();
+			records = data.records;
+			allFieldKeys = getAllFieldKeys(data.records);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Unknown error';
+			records = [];
+			allFieldKeys = [];
+		} finally {
+			loading = false;
+		}
+	}
 </script>
+
+<div class="top-bar">
+	<button onclick={fetchData} disabled={loading}>
+		{loading ? 'Loading...' : 'Get recent data'}
+	</button>
+</div>
 
 <div class="layout">
 	<main>
-		<h1>CuratedNewsletterAutomatingWebsite</h1>
-		<p class="subtitle">Automated curation for newsletters — streamlined and simple.</p>
-
-		<hr />
-
-		<p>
-			This project is a work-in-progress focused on automating the process of curating
-			newsletter content. The goal is to reduce manual effort while maintaining
-			high-quality editorial selection.
-		</p>
-
-		<p>A full-featured application is in development. Stay tuned for updates.</p>
+		{#if error}
+			<p class="error-message">{error}</p>
+		{:else if loading}
+			<p class="status">Fetching data...</p>
+		{:else if records.length > 0}
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th>ID</th>
+							<th>Created</th>
+							{#each allFieldKeys as key}
+								<th>{key}</th>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						{#each records as record}
+							<tr>
+								<td class="cell-id">{record.id}</td>
+								<td class="cell-date">{record.createdTime}</td>
+								{#each allFieldKeys as key}
+									<td>{String(record.fields[key] ?? '')}</td>
+								{/each}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<p class="status">Press "Get recent data" to fetch records from Airtable.</p>
+		{/if}
 	</main>
 
 	<aside class="sidebar">
@@ -124,25 +215,9 @@
 		gap: 2rem;
 		align-items: start;
 	}
-	h1 {
-		font-size: 2rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		margin-bottom: 0.5rem;
-	}
-	.subtitle {
-		font-size: 1.125rem;
-		color: #64748b;
-		margin-bottom: 2rem;
-	}
 	p {
 		margin-bottom: 1rem;
 		color: #334155;
-	}
-	hr {
-		border: none;
-		border-top: 1px solid #e2e8f0;
-		margin: 2rem 0;
 	}
 	.sidebar {
 		background: #f8fafc;
@@ -233,5 +308,74 @@
 		color: #166534;
 		border-radius: 0.25rem;
 		font-size: 0.75rem;
+	}
+	.top-bar {
+		text-align: center;
+		margin-bottom: 1.5rem;
+	}
+	.top-bar button {
+		padding: 0.5rem 1.5rem;
+		font-size: 1rem;
+		background: #3b82f6;
+		color: #fff;
+		border: none;
+		border-radius: 0.375rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.top-bar button:hover:not(:disabled) {
+		background: #2563eb;
+	}
+	.top-bar button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.status {
+		text-align: center;
+		color: #64748b;
+		padding: 2rem 0;
+	}
+	.error-message {
+		background: #fef2f2;
+		color: #dc2626;
+		padding: 0.75rem 1rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+	}
+	.table-scroll {
+		overflow-x: auto;
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.8125rem;
+	}
+	th,
+	td {
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+		border-bottom: 1px solid #e2e8f0;
+		white-space: nowrap;
+	}
+	th {
+		background: #f8fafc;
+		font-weight: 600;
+		color: #475569;
+		position: sticky;
+		top: 0;
+	}
+	tr:hover {
+		background: #f1f5f9;
+	}
+	.cell-id {
+		font-family: monospace;
+		font-size: 0.75rem;
+		color: #64748b;
+	}
+	.cell-date {
+		font-family: monospace;
+		font-size: 0.75rem;
+		color: #64748b;
+		white-space: nowrap;
 	}
 </style>
